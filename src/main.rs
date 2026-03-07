@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use rycharger::config::Config;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let config = Config::load();
+    let config = Arc::new(Config::load()?);
 
-    Ok(())
+    rycharger::daemon::run(config).await
 }

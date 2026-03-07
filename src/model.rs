@@ -1,6 +1,5 @@
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::{f64::consts::TAU, path::Path};
+use std::f64::consts::TAU;
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
 
@@ -67,7 +66,7 @@ impl Features {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogisticRegression {
     weights: Vec<f64>,
     bias: f64,
@@ -88,6 +87,13 @@ impl LogisticRegression {
             running_session_total_mins: 0.0,
             running_session_count: 0,
         }
+    }
+
+    pub fn avg_session_length_mins(&self) -> f64 {
+        if self.running_session_count == 0 {
+            return 0.0;
+        }
+        self.running_session_total_mins / self.running_session_count as f64
     }
 
     fn sigmoid(z: f64) -> f64 {
@@ -152,23 +158,6 @@ impl LogisticRegression {
             })
             .sum();
         total / sessions.len() as f64
-    }
-
-    /// Save model weights to disk
-    fn save(&self, path: &Path) -> Result<()> {
-        let json = serde_json::to_string_pretty(self)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, json)?;
-        Ok(())
-    }
-
-    /// Load model weights from disk
-    fn load(path: &Path) -> Result<Self> {
-        let contents = std::fs::read_to_string(path)?;
-        let model = serde_json::from_str(&contents)?;
-        Ok(model)
     }
 }
 
