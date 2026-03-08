@@ -21,8 +21,19 @@ pub struct BatteryConfig {
     pub full_percent: u8,
 }
 
+#[derive(Debug, Default, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelType {
+    LogisticRegression,
+    #[default]
+    GradientBoostedTree,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ModelConfig {
+    /// Which model implementation to use
+    pub model_type: ModelType,
+
     /// Probability threshold above which we charge to full
     pub charge_threshold: f64,
 
@@ -55,6 +66,7 @@ impl Default for BatteryConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
+            model_type: ModelType::default(),
             charge_threshold: 0.7,
             prediciton_horizon_mins: 60,
             min_training_sessions: 14,
