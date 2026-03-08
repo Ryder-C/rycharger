@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{
-    ChargeModel, Features, NUM_FEATURES, Prediction, Session, avg_session_length,
-    session_to_example, sigmoid,
-};
+use super::{ChargeModel, Features, NUM_FEATURES, Prediction, RunningStats, Session, session_to_example, sigmoid};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogisticRegression {
@@ -11,9 +8,7 @@ pub struct LogisticRegression {
     bias: f64,
     learning_rate: f64,
     trained_count: usize,
-
-    running_session_total_mins: f64,
-    running_session_count: usize,
+    stats: RunningStats,
 }
 
 impl Default for LogisticRegression {
@@ -29,11 +24,9 @@ impl LogisticRegression {
             bias: 0.0,
             learning_rate: 0.01,
             trained_count: 0,
-            running_session_total_mins: 0.0,
-            running_session_count: 0,
+            stats: RunningStats::new(),
         }
     }
-
 
     fn forward(&self, features: &Features) -> f64 {
         let z: f64 = self
@@ -56,7 +49,6 @@ impl LogisticRegression {
         }
         self.bias -= self.learning_rate * error;
     }
-
 }
 
 impl ChargeModel for LogisticRegression {
@@ -69,7 +61,8 @@ impl ChargeModel for LogisticRegression {
     }
 
     fn train(&mut self, sessions: &[Session], horizon_mins: u64) {
-        let avg_len = avg_session_length(sessions);
+        self.stats = RunningStats::from_sessions(sessions);
+        let avg_len = self.stats.average();
 
         for _ in 0..10 {
             for session in sessions {
@@ -78,20 +71,11 @@ impl ChargeModel for LogisticRegression {
             }
         }
         self.trained_count = sessions.len();
-
-        self.running_session_total_mins = avg_len * sessions.len() as f64;
-        self.running_session_count = sessions.len();
     }
 
     fn update(&mut self, session: &Session, horizon_mins: u64) {
-        let duration_mins = session
-            .unplugged_at
-            .signed_duration_since(session.plugged_in_at)
-            .num_minutes() as f64;
-
-        self.running_session_total_mins += duration_mins;
-        self.running_session_count += 1;
-        let avg = self.running_session_total_mins / self.running_session_count as f64;
+        self.stats.update(session);
+        let avg = self.stats.average();
 
         let (features, label) = session_to_example(session, horizon_mins, avg);
         self.sgd_step(&features, label);
@@ -103,9 +87,6 @@ impl ChargeModel for LogisticRegression {
     }
 
     fn avg_session_length_mins(&self) -> f64 {
-        if self.running_session_count == 0 {
-            return 0.0;
-        }
-        self.running_session_total_mins / self.running_session_count as f64
+        self.stats.average()
     }
 }

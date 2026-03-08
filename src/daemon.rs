@@ -17,8 +17,6 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
     let (tx, mut rx) = mpsc::channel(32);
     tokio::spawn(collection::run(Arc::clone(&config), tx));
 
-    let mut plugged_in_since: Option<NaiveDateTime> = None;
-
     info!(
         training_count = weights.as_model().training_count(),
         "rycharger started"
@@ -30,21 +28,14 @@ pub async fn run(config: Arc<Config>) -> Result<()> {
                 db.insert_session(&session)?;
                 weights
                     .as_model_mut()
-                    .update(&session, config.model.prediciton_horizon_mins);
+                    .update(&session, config.model.prediction_horizon_mins);
                 db.save_model(&weights)?;
-                plugged_in_since = None;
                 info!(
                     training_count = weights.as_model().training_count(),
                     "model updated with new session"
                 );
             }
-            Event::Tick(snap) => {
-                if snap.on_ac && plugged_in_since.is_none() {
-                    plugged_in_since = Some(Local::now().naive_local());
-                } else if !snap.on_ac {
-                    plugged_in_since = None;
-                }
-
+            Event::Tick(snap, plugged_in_since) => {
                 if snap.on_ac {
                     set_charge_target(&config, weights.as_model(), plugged_in_since);
                 }
@@ -79,7 +70,7 @@ fn load_or_train_model(db: &Database, config: &Config) -> Result<ModelWeights> {
         info!(sessions = sessions.len(), "retraining model from history");
         weights
             .as_model_mut()
-            .train(&sessions, config.model.prediciton_horizon_mins);
+            .train(&sessions, config.model.prediction_horizon_mins);
         db.save_model(&weights)?;
     }
 

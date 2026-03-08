@@ -5,6 +5,7 @@ pub use gradient_boosted_tree::GradientBoostedTree;
 pub use logistic_regression::LogisticRegression;
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
+use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
 
 /// A recorded charging session
@@ -19,11 +20,59 @@ pub struct Features {
 }
 
 pub struct Prediction {
-    /// Probability that the user will unplug within prediciton horizon
+    /// Probability that the user will unplug within prediction horizon
     pub unplug_probability: f64,
 
     /// Whether we should charge to full based on threshold
     pub should_charge_to_full: bool,
+}
+
+/// Tracks running average of session durations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct RunningStats {
+    total_mins: f64,
+    count: usize,
+}
+
+impl RunningStats {
+    pub fn new() -> Self {
+        Self {
+            total_mins: 0.0,
+            count: 0,
+        }
+    }
+
+    pub fn from_sessions(sessions: &[Session]) -> Self {
+        let total_mins: f64 = sessions
+            .iter()
+            .map(|s| {
+                s.unplugged_at
+                    .signed_duration_since(s.plugged_in_at)
+                    .num_minutes() as f64
+            })
+            .sum();
+        Self {
+            total_mins,
+            count: sessions.len(),
+        }
+    }
+
+    pub fn update(&mut self, session: &Session) {
+        let duration_mins = session
+            .unplugged_at
+            .signed_duration_since(session.plugged_in_at)
+            .num_minutes() as f64;
+        self.total_mins += duration_mins;
+        self.count += 1;
+    }
+
+    pub fn average(&self) -> f64 {
+        if self.count == 0 {
+            0.0
+        } else {
+            self.total_mins / self.count as f64
+        }
+    }
 }
 
 pub trait ChargeModel {
@@ -54,10 +103,10 @@ pub(crate) fn session_to_example(
     horizon_mins: u64,
     avg_session_len: f64,
 ) -> (Features, f64) {
-    let duration = session
+    let duration_mins = session
         .unplugged_at
-        .signed_duration_since(session.plugged_in_at);
-    let duration_mins = duration.num_minutes() as f64;
+        .signed_duration_since(session.plugged_in_at)
+        .num_minutes() as f64;
 
     let features = Features::extract(session.plugged_in_at, 0.0, avg_session_len);
     let label = if duration_mins <= horizon_mins as f64 {
@@ -69,23 +118,8 @@ pub(crate) fn session_to_example(
     (features, label)
 }
 
-pub(crate) fn avg_session_length(sessions: &[Session]) -> f64 {
-    if sessions.is_empty() {
-        return 0.0;
-    }
-    let total: f64 = sessions
-        .iter()
-        .map(|s| {
-            s.unplugged_at
-                .signed_duration_since(s.plugged_in_at)
-                .num_minutes() as f64
-        })
-        .sum();
-    total / sessions.len() as f64
-}
-
 impl Features {
-    /// Extracte features from the current moment + context
+    /// Extract features from the current moment + context
     pub fn extract(
         now: NaiveDateTime,
         minutes_plugged_in: f64,
@@ -99,7 +133,7 @@ impl Features {
         values.push((hour_frac * TAU / 24.0).cos());
 
         // Day of week encoding (one-hot)
-        let dow = now.weekday().number_from_monday() as usize;
+        let dow = now.weekday().number_from_monday() as usize - 1;
         for i in 0..7 {
             values.push(if i == dow { 1.0 } else { 0.0 });
         }

@@ -38,9 +38,9 @@ pub struct ModelConfig {
     pub charge_threshold: f64,
 
     /// How far ahead (in minutes) to predict whether the user will unplug
-    pub prediciton_horizon_mins: u64,
+    pub prediction_horizon_mins: u64,
 
-    /// Minimum number of recorded sessions before the model starts making predicitons
+    /// Minimum number of recorded sessions before the model starts making predictions
     pub min_training_sessions: usize,
 }
 
@@ -68,7 +68,7 @@ impl Default for ModelConfig {
         Self {
             model_type: ModelType::default(),
             charge_threshold: 0.7,
-            prediciton_horizon_mins: 60,
+            prediction_horizon_mins: 60,
             min_training_sessions: 14,
         }
     }
