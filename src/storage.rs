@@ -5,7 +5,7 @@ use chrono::NaiveDateTime;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{LogisticRegression, Session};
+use crate::model::{ChargeModel, GradientBoostedTree, LogisticRegression, Session};
 
 const DATETIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
@@ -14,6 +14,23 @@ const DATETIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 #[serde(tag = "type")]
 pub enum ModelWeights {
     LogisticRegression(LogisticRegression),
+    GradientBoostedTree(GradientBoostedTree),
+}
+
+impl ModelWeights {
+    pub fn as_model(&self) -> &dyn ChargeModel {
+        match self {
+            ModelWeights::LogisticRegression(m) => m,
+            ModelWeights::GradientBoostedTree(m) => m,
+        }
+    }
+
+    pub fn as_model_mut(&mut self) -> &mut dyn ChargeModel {
+        match self {
+            ModelWeights::LogisticRegression(m) => m,
+            ModelWeights::GradientBoostedTree(m) => m,
+        }
+    }
 }
 
 pub struct Database {

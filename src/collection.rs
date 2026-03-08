@@ -48,7 +48,7 @@ pub struct BatterySnapshot {
 /// Events emitted by the collector
 pub enum Event {
     /// A periodic battery reading (every poll tick)
-    Tick(BatterySnapshot),
+    Tick(BatterySnapshot, Option<NaiveDateTime>),
     /// A completed charge session (charger was unplugged)
     SessionComplete(Session),
 }
@@ -142,7 +142,7 @@ pub async fn run(config: Arc<Config>, tx: mpsc::Sender<Event>) -> Result<()> {
         was_on_ac = snap.on_ac;
 
         // Always emit a tick so the main loop can run charge control
-        send(&tx, Event::Tick(snap)).await?;
+        send(&tx, Event::Tick(snap, session_start)).await?;
     }
 }
 
