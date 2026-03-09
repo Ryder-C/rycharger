@@ -4,12 +4,16 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
+    #[serde(default)]
     pub battery: BatteryConfig,
+    #[serde(default)]
     pub model: ModelConfig,
+    #[serde(default)]
     pub daemon: DaemonConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct BatteryConfig {
     /// Battery device to use in /sys/class/power_supply/<device>
     pub device: String,
@@ -30,6 +34,7 @@ pub enum ModelType {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct ModelConfig {
     /// Which model implementation to use
     pub model_type: ModelType,
@@ -45,6 +50,7 @@ pub struct ModelConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct DaemonConfig {
     /// How often (in seconds) to poll battery state and run predictions
     pub poll_interval_secs: u64,
