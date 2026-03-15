@@ -17,17 +17,6 @@ in
 
     package = lib.mkPackageOption flake.packages.${pkgs.system} "default" { };
 
-    user = lib.mkOption {
-      type = lib.types.str;
-      description = "User account under which rycharger runs.";
-    };
-
-    group = lib.mkOption {
-      type = lib.types.str;
-      default = "rycharger";
-      description = "Group under which rycharger runs.";
-    };
-
     settings = lib.mkOption {
       type = settingsFormat.type;
       default = { };
@@ -51,7 +40,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    users.groups.${cfg.group} = { };
+    environment.etc."rycharger/config.toml".source = configFile;
 
     systemd.services.rycharger = {
       description = "Rycharger battery charge management daemon";
@@ -59,38 +48,16 @@ in
       after = [ "sys-subsystem-power_supply.target" ];
 
       environment = {
-        XDG_CONFIG_HOME = "/var/lib/rycharger/config";
-        XDG_DATA_HOME = "/var/lib/rycharger/data";
+        XDG_CONFIG_HOME = "/etc";
+        XDG_DATA_HOME = "/var/lib";
       };
-
-      preStart = ''
-        mkdir -p "$XDG_CONFIG_HOME/rycharger" "$XDG_DATA_HOME/rycharger"
-        ln -sf ${configFile} "$XDG_CONFIG_HOME/rycharger/config.toml"
-      '';
 
       serviceConfig = {
         Type = "simple";
         ExecStart = lib.getExe cfg.package;
         Restart = "on-failure";
         RestartSec = 10;
-
-        User = cfg.user;
-        Group = cfg.group;
-
         StateDirectory = "rycharger";
-
-        AmbientCapabilities = [ "CAP_DAC_OVERRIDE" ];
-        CapabilityBoundingSet = [ "CAP_DAC_OVERRIDE" ];
-
-        NoNewPrivileges = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ReadWritePaths = [
-          "/sys/class/power_supply"
-          "/var/lib/rycharger"
-        ];
-        PrivateTmp = true;
-        ProtectKernelTunables = false; # needed for /sys/ writes
       };
     };
   };
