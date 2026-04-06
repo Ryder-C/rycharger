@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ChargeModel, Features, NUM_FEATURES, Prediction, RunningStats, Session, session_to_example,
+    ChargeModel, Features, NUM_FEATURES, Prediction, RunningStats, Session, session_to_examples,
     sigmoid,
 };
 
@@ -248,7 +248,7 @@ impl ChargeModel for GradientBoostedTree {
 
         let examples: Vec<(Features, f64)> = sessions
             .iter()
-            .map(|s| session_to_example(s, horizon_mins, avg_len))
+            .flat_map(|s| session_to_examples(s, horizon_mins, avg_len))
             .collect();
 
         // Compute base score from class prior
@@ -293,15 +293,17 @@ impl ChargeModel for GradientBoostedTree {
         let avg = self.stats.average();
 
         if self.trees.len() < self.max_trees {
-            let (features, label) = session_to_example(session, horizon_mins, avg);
-            let pred = sigmoid(self.raw_score(&features));
-            let g = pred - label;
-            let h = pred * (1.0 - pred);
-            let weight = -g / (h + self.lambda);
+            let examples = session_to_examples(session, horizon_mins, avg);
+            for (features, label) in examples {
+                let pred = sigmoid(self.raw_score(&features));
+                let g = pred - label;
+                let h = pred * (1.0 - pred);
+                let weight = -g / (h + self.lambda);
 
-            self.trees.push(Tree {
-                nodes: vec![Node::Leaf { weight }],
-            });
+                self.trees.push(Tree {
+                    nodes: vec![Node::Leaf { weight }],
+                });
+            }
         }
 
         self.trained_count += 1;

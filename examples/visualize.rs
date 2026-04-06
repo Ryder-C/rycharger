@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use chrono::NaiveDate;
 use rycharger::{model::Features, storage::Database};
 
@@ -62,6 +62,7 @@ fn main() -> Result<()> {
     let model = weights.as_model();
     let threshold = config.model.charge_threshold;
     let avg_session = model.avg_session_length_mins();
+    let horizon = config.model.prediction_horizon_mins as f64;
 
     // Use a Monday as reference so weekday index lines up
     let ref_monday = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(); // a Monday
@@ -77,7 +78,11 @@ fn main() -> Result<()> {
             let mut sum = 0.0;
             for half in [0, 30] {
                 let dt = date.and_hms_opt(hour as u32, half, 0).unwrap();
-                let features = Features::extract(dt, 0.0, avg_session);
+
+                // Use (avg - horizon/2) as a representative state for "near the end".
+                let query_duration = (avg_session - horizon / 2.0).max(0.0);
+
+                let features = Features::extract(dt, query_duration, avg_session);
                 let pred = model.predict(&features, threshold);
                 sum += pred.unplug_probability;
             }

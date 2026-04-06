@@ -98,24 +98,37 @@ pub(crate) fn sigmoid(z: f64) -> f64 {
     1.0 / (1.0 + (-z).exp())
 }
 
-pub(crate) fn session_to_example(
+pub(crate) fn session_to_examples(
     session: &Session,
     horizon_mins: u64,
     avg_session_len: f64,
-) -> (Features, f64) {
-    let duration_mins = session
+) -> Vec<(Features, f64)> {
+    let mut examples = Vec::new();
+    let total_duration = session
         .unplugged_at
         .signed_duration_since(session.plugged_in_at)
-        .num_minutes() as f64;
+        .num_minutes();
 
-    let features = Features::extract(session.plugged_in_at, 0.0, avg_session_len);
-    let label = if duration_mins <= horizon_mins as f64 {
-        1.0
-    } else {
-        0.0
-    };
+    // Sample every 30 minutes throughout the session
+    for mins_into_session in (0..total_duration).step_by(30) {
+        let current_time = session.plugged_in_at + chrono::Duration::minutes(mins_into_session);
+        let features = Features::extract(current_time, mins_into_session as f64, avg_session_len);
 
-    (features, label)
+        let mins_remaining = total_duration - mins_into_session;
+        let label = if mins_remaining <= horizon_mins as i64 {
+            1.0
+        } else {
+            0.0
+        };
+
+        examples.push((features, label));
+    }
+
+    // Always include the actual unplug event as a positive example
+    let features = Features::extract(session.unplugged_at, total_duration as f64, avg_session_len);
+    examples.push((features, 1.0));
+
+    examples
 }
 
 impl Features {

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ChargeModel, Features, NUM_FEATURES, Prediction, RunningStats, Session, session_to_example, sigmoid};
+use super::{ChargeModel, Features, NUM_FEATURES, Prediction, RunningStats, Session, session_to_examples, sigmoid};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogisticRegression {
@@ -66,8 +66,10 @@ impl ChargeModel for LogisticRegression {
 
         for _ in 0..10 {
             for session in sessions {
-                let (features, label) = session_to_example(session, horizon_mins, avg_len);
-                self.sgd_step(&features, label);
+                let examples = session_to_examples(session, horizon_mins, avg_len);
+                for (features, label) in examples {
+                    self.sgd_step(&features, label);
+                }
             }
         }
         self.trained_count = sessions.len();
@@ -77,8 +79,10 @@ impl ChargeModel for LogisticRegression {
         self.stats.update(session);
         let avg = self.stats.average();
 
-        let (features, label) = session_to_example(session, horizon_mins, avg);
-        self.sgd_step(&features, label);
+        let examples = session_to_examples(session, horizon_mins, avg);
+        for (features, label) in examples {
+            self.sgd_step(&features, label);
+        }
         self.trained_count += 1;
     }
 
