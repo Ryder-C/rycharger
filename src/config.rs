@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
     pub battery: BatteryConfig,
@@ -59,14 +59,39 @@ pub struct DaemonConfig {
     pub db_path: PathBuf,
 }
 
-impl Default for BatteryConfig {
-    fn default() -> Self {
+impl BatteryConfig {
+    fn with_device(device: String) -> Self {
         Self {
-            device: "BAT0".to_string(),
+            device,
             hold_percent: 80,
             full_percent: 100,
         }
     }
+}
+
+/// Scans `/sys/class/power_supply/` for a battery device that exposes
+/// `charge_control_end_threshold` and returns the first match (alphabetically).
+fn detect_battery_device() -> anyhow::Result<String> {
+    let mut candidates: Vec<String> = std::fs::read_dir("/sys/class/power_supply")?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .path()
+                .join("charge_control_end_threshold")
+                .exists()
+        })
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+
+    candidates.sort();
+
+    candidates.into_iter().next().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Could not auto-detect a battery device: no entry under \
+             /sys/class/power_supply/ exposes charge_control_end_threshold. \
+             Set battery.device manually in the config file."
+        )
+    })
 }
 
 impl Default for ModelConfig {
@@ -114,7 +139,13 @@ impl Config {
             let config = toml::from_str(&contents)?;
             Ok(config)
         } else {
-            let config = Self::default();
+            let device = detect_battery_device()?;
+            tracing::info!("Auto-detected battery device: {device}");
+            let config = Self {
+                battery: BatteryConfig::with_device(device),
+                model: ModelConfig::default(),
+                daemon: DaemonConfig::default(),
+            };
             config.save()?;
             Ok(config)
         }

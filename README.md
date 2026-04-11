@@ -6,8 +6,8 @@ A smart battery charge management daemon for Linux laptops. rycharger learns you
 
 rycharger polls your battery every minute and records charging sessions. Over time, it trains a machine learning model on your plug/unplug history. When you're plugged in, it predicts the probability you'll unplug within the next hour and sets your charge threshold accordingly:
 
-- **Likely to stay plugged in** → holds charge at ~80%, reducing battery wear
-- **Likely to unplug soon** → charges to 100% so you leave with a full battery
+- **Likely to stay plugged in** &rarr; holds charge at ~80%, reducing battery wear
+- **Likely to unplug soon** &rarr; charges to 100% so you leave with a full battery
 
 Predictions use features like time of day, day of week, and how long you've already been plugged in. The model improves as it collects more sessions.
 
@@ -83,9 +83,7 @@ Then enable the NixOS module:
 
   services.rycharger = {
     enable = true;
-    settings = {
-      battery.device = "BAT0"; # Replace with your battery device
-    };
+    # settings.battery.device = "BAT0"; # Optional override; auto-detected by default
   };
 }
 ```
@@ -94,11 +92,11 @@ The service runs as a systemd unit with the permissions it needs to write to sys
 
 ## Configuration
 
-On first run, rycharger creates `~/.config/rycharger/config.toml` with defaults:
+On first run, rycharger scans `/sys/class/power_supply/` for a device that exposes `charge_control_end_threshold`, picks the first match alphabetically, and writes `~/.config/rycharger/config.toml` with sensible defaults:
 
 ```toml
 [battery]
-device = "BAT0"       # Battery device under /sys/class/power_supply/
+device = "BAT0"       # Auto-detected on first run; edit if the wrong battery was picked
 hold_percent = 80     # Charge limit when staying plugged in
 full_percent = 100    # Charge limit when about to unplug
 
