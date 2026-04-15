@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Config {
     #[serde(default)]
     pub battery: BatteryConfig,
@@ -15,7 +15,8 @@ pub struct Config {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct BatteryConfig {
-    /// Battery device to use in /sys/class/power_supply/<device>
+    /// Battery device to use in /sys/class/power_supply/<device>.
+    /// Empty string triggers auto-detection on startup.
     pub device: String,
 
     /// Percentage at which to hold charge
@@ -23,6 +24,16 @@ pub struct BatteryConfig {
 
     /// Percentage at which to consider the battery full
     pub full_percent: u8,
+}
+
+impl Default for BatteryConfig {
+    fn default() -> Self {
+        Self {
+            device: String::new(),
+            hold_percent: 80,
+            full_percent: 100,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, Deserialize, Serialize)]
@@ -57,16 +68,6 @@ pub struct DaemonConfig {
 
     /// Path to SQLite database for session logging
     pub db_path: PathBuf,
-}
-
-impl BatteryConfig {
-    fn with_device(device: String) -> Self {
-        Self {
-            device,
-            hold_percent: 80,
-            full_percent: 100,
-        }
-    }
 }
 
 /// Scans `/sys/class/power_supply/` for a battery device that exposes
@@ -134,21 +135,26 @@ impl Config {
     pub fn load() -> anyhow::Result<Self> {
         let path = Self::config_file();
 
-        if path.exists() {
+        let mut config: Config = if path.exists() {
             let contents = std::fs::read_to_string(&path)?;
-            let config = toml::from_str(&contents)?;
-            Ok(config)
+            toml::from_str(&contents)?
         } else {
+            Config::default()
+        };
+
+        if config.battery.device.is_empty() {
             let device = detect_battery_device()?;
             tracing::info!("Auto-detected battery device: {device}");
-            let config = Self {
-                battery: BatteryConfig::with_device(device),
-                model: ModelConfig::default(),
-                daemon: DaemonConfig::default(),
-            };
-            config.save()?;
-            Ok(config)
+            config.battery.device = device;
+            if let Err(e) = config.save() {
+                tracing::warn!(
+                    "Could not persist config to {}: {e}. Auto-detection will run again next startup.",
+                    Self::config_file().display()
+                );
+            }
         }
+
+        Ok(config)
     }
 
     fn save(&self) -> anyhow::Result<()> {

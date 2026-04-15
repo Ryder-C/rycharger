@@ -2,6 +2,9 @@
 
 A smart battery charge management daemon for Linux laptops. rycharger learns your usage patterns and automatically adjusts your charge threshold.
 
+> [!NOTE]
+> rycharger won't make any charging decisions until it has sufficient training sessions. See [Configuration](#configuration)
+
 ## How it works
 
 rycharger polls your battery every minute and records charging sessions. Over time, it trains a machine learning model on your plug/unplug history. When you're plugged in, it predicts the probability you'll unplug within the next hour and sets your charge threshold accordingly:
@@ -43,7 +46,10 @@ docker run -d \
   ghcr.io/ryder-c/rycharger:latest
 ```
 
-> **Note:** `--privileged` is required to write to sysfs. If you prefer not to use it, you can grant write access via the udev rule in the Linux install script and mount only the specific battery path instead.
+The image stores both the config file and the SQLite database under `/var/lib/rycharger/`, so the single named volume persists everything.
+
+> [!WARNING]
+> `--privileged` is required to write to sysfs. If you prefer not to use it, you can grant write access via the udev rule in the Linux install script and mount only the specific battery path instead.
 
 Or with Docker Compose:
 
@@ -56,7 +62,6 @@ services:
     volumes:
       - /sys/class/power_supply:/sys/class/power_supply
       - rycharger-data:/var/lib/rycharger
-      # - ./config.toml:/etc/rycharger/config.toml:ro  # optional custom config
 
 volumes:
   rycharger-data:
@@ -113,10 +118,13 @@ db_path = "~/.local/share/rycharger/rycharger.db"
 
 ## Data storage
 
-| Path                                    | Contents                          |
-| --------------------------------------- | --------------------------------- |
-| `~/.config/rycharger/config.toml`       | Configuration                     |
-| `~/.local/share/rycharger/rycharger.db` | Session history and model weights |
+Paths follow the [XDG base-dir spec](https://specifications.freedesktop.org/basedir-spec/latest/), so they differ by install method:
+
+| Install      | Config                            | Database                                |
+| ------------ | --------------------------------- | --------------------------------------- |
+| Linux script | `~/.config/rycharger/config.toml` | `~/.local/share/rycharger/rycharger.db` |
+| NixOS module | `/etc/rycharger/config.toml`      | `/var/lib/rycharger/rycharger.db`       |
+| Docker       | `/var/lib/rycharger/config.toml`  | `/var/lib/rycharger/rycharger.db`       |
 
 ## License
 
